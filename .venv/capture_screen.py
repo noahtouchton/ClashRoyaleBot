@@ -84,6 +84,40 @@ def find_time(img, scaled_boxes):
             # Skip bad OCR frames
             print(f"Timer OCR failed: '{raw_time_text}'")
 
+def check_pixel(img, pixel, desired_color, tolerance=0):
+    x, y = pixel
+    x = int(x)
+    y = int(y)
+
+    # Check bounds
+    if not (0 <= x < img.shape[1] and 0 <= y < img.shape[0]):
+        return False
+
+    pixel_color = img[y, x]  # OpenCV uses BGR and row=y, col=x
+
+    # Compare color with tolerance
+    return all(abs(int(pc) - int(dc)) <= tolerance for pc, dc in zip(pixel_color, desired_color))
+
+
+def check_if_on_menu(img, real_w, real_h, tolerance=10):
+    # Reference window dimensions (base resolution)
+    window_w = 501
+    window_h = 865
+
+    # Reference pixel position from base resolution
+    ref_x, ref_y = 295, 698
+
+    # Scale to current resolution
+    scaled_x = real_w / window_w * ref_x
+    scaled_y = real_h / window_h * ref_y
+
+    # Reference BGR color (Clash Royale menu button?)
+    ref_color = (0, 164, 255)
+
+    return check_pixel(img, (scaled_x, scaled_y), ref_color, tolerance)
+
+
+
 
 def main():
     window = gw.getWindowsWithTitle("BlueStacks")[0]
@@ -101,38 +135,44 @@ def main():
         # Scale boxes to current window size
         scaled_boxes = scale_boxes(width, height)
 
-        # Draw boxes
-        img_with_boxes = draw_boxes_on_image(img, scaled_boxes)
+        if not check_if_on_menu(img, width, height):
 
-        # Save the image
-        cv2.imwrite("bluestacks_debug.png", img_with_boxes)
+            # Draw boxes
+            img_with_boxes = draw_boxes_on_image(img, scaled_boxes)
 
-        # Show live window (optional)
-        cv2.imshow("Bluestacks Tracker", img_with_boxes)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+            # Save the image
+            cv2.imwrite("bluestacks_debug.png", img_with_boxes)
 
-        raw_time_text = extract_text(img, scaled_boxes["timer"])
+            # Show live window (optional)
+            cv2.imshow("Bluestacks Tracker", img_with_boxes)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
-        # If OCR returns blank text, skip immediately
-        if raw_time_text is None or raw_time_text.strip() == "":
-            print("Timer OCR returned blank text this frame")
+            raw_time_text = extract_text(img, scaled_boxes["timer"])
+
+            # If OCR returns blank text, skip immediately
+            if raw_time_text is None or raw_time_text.strip() == "":
+                print("Timer OCR returned blank text this frame")
+            else:
+                # Remove any colon characters if present
+                raw_time_text = raw_time_text.replace(":", "").strip()
+
+                try:
+                    raw_time = int(raw_time_text)
+                    seconds = raw_time % 100
+                    minutes = raw_time // 100
+
+
+                except (ValueError, TypeError):
+                    # Skip bad OCR frames
+                    print(f"Timer OCR failed: '{raw_time_text}'")
+
+            # Control refresh rate (lower = faster but more CPU)
+            time.sleep(0.05)
         else:
-            # Remove any colon characters if present
-            raw_time_text = raw_time_text.replace(":", "").strip()
-
-            try:
-                raw_time = int(raw_time_text)
-                seconds = raw_time % 100
-                minutes = raw_time // 100
-
-
-            except (ValueError, TypeError):
-                # Skip bad OCR frames
-                print(f"Timer OCR failed: '{raw_time_text}'")
-
-        # Control refresh rate (lower = faster but more CPU)
-        time.sleep(0.05)
+            print("In menu waiting to start...")
+            time.sleep(0.1)
+            cv2.destroyAllWindows()
 
     cv2.destroyAllWindows()
 
