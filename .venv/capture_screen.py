@@ -116,6 +116,31 @@ def check_if_on_menu(img, real_w, real_h, tolerance=10):
 
     return check_pixel(img, (scaled_x, scaled_y), ref_color, tolerance)
 
+def calculate_elixer(img, scaled_boxes, pixels_for_one, pixels_for_two):  
+    # Crop the elixir bar region
+    x1, y1, x2, y2 = scaled_boxes["elixer bar"]
+    elixer_bar = img[y1:y2, x1:x2]
+
+    # Convert to grayscale
+    gray = cv2.cvtColor(elixer_bar, cv2.COLOR_BGR2GRAY)
+
+    # Threshold for purple color bar (adjust threshold if needed)
+    _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+
+    # Count the filled pixels
+    elixer_pixels = cv2.countNonZero(thresh)
+
+    # Calculate pixels per elixir unit using calibration
+    pixels_per_unit = pixels_for_two - pixels_for_one  # difference per 1 elixir
+    baseline = pixels_for_one - pixels_per_unit        # pixels at 0 elixir
+
+    # Calculate elixir value (0 - 10)
+    elixir_value = (elixer_pixels - baseline) / pixels_per_unit
+
+    # Clamp between 0 and 10
+    elixir_value = max(0.0, min(10.0, elixir_value))
+
+    return round(elixir_value, 2)
 
 
 
